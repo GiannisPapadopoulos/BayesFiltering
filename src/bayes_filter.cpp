@@ -46,8 +46,10 @@ class BayesFilter {
             tempBeliefs.push_back(0.0);
         }
         ROS_INFO("Beliefs initialized");
+
         calculateMovementTransitionProbs();
         calculateRotationTransitionProbs();
+        initializeExpectedMeasurements();
         /*============================================*/
 
 	};
@@ -106,6 +108,18 @@ class BayesFilter {
             rotationTransitionProbabilitiesDeterministic[i][NUM_STATES - i - 1] = 1.0;
         }
         ROS_INFO("Rotation transition probabilities initialized");
+    }
+
+    void initializeExpectedMeasurements() {
+        ROS_INFO("1-1 %d ", expectedMeasurements[1][1]);
+        for(int i = 0; i < NUM_STATES; i++) {
+            // wall front
+            expectedMeasurements[i][0] = i == 9 || i == 19;
+            // wall left
+            expectedMeasurements[i][1] = !(i == 1 || i == 7 || i == 16);
+            // wall right
+            expectedMeasurements[i][2] = !(i == 3 || i == 12 || i == 18);
+        }
     }
 
 	// Publish visual information to RVIZ of the beliefstates 
@@ -214,6 +228,10 @@ class BayesFilter {
         {
             beliefStates[i] = tempBeliefs[i];
         }
+        for (int i = 0; i < NUM_STATES; i++)
+        {
+            ROS_INFO("Belief state [%d] = [%f]",i,beliefStates[i]);
+        }
     };
 	/*==========================================*/
 	
@@ -238,20 +256,64 @@ class BayesFilter {
         {
             beliefStates[i] = tempBeliefs[i];
         }
+        for (int i = 0; i < NUM_STATES; i++)
+        {
+            ROS_INFO("Belief state [%d] = [%f]",i,beliefStates[i]);
+        }
 	};
 	/*==========================================*/
+
 
 	/*=TODO - INSERT-CHANGE CODE HERE IF NEEDED=*/
 	void updateSensing()
 	{
 		ROS_INFO("########## Update sensing ########");
-        int sensorMeasurements[3] = {(wall_front) ? 1 : 0, (wall_left) ? 1 : 0,  (wall_right) ? 1 : 0};
-        ROS_INFO("F-L-R %d %d %d", sensorMeasurements[0], sensorMeasurements[1], sensorMeasurements[2]);
+        bool sensorMeasurements[3] = {wall_front, wall_left,  wall_right};
+        ROS_INFO("measurements %d %d %d", sensorMeasurements[0], sensorMeasurements[1], sensorMeasurements[2]);
 
-        // example routine, generates random beliefs
-		for (int i = 0; i<NUM_STATES; i++)
-			beliefStates[i]=(double)(rand()%100)/100;
-	}
+        // calculate observation probabilities p(Zt | Xt) for each state
+
+        double observationProbabilities[NUM_STATES];
+        for (int i = 0; i < NUM_STATES; i++)
+        {
+            // the expected measurements in state i
+            bool* expected = expectedMeasurements[i];
+
+            // Combined probability for all 3 sensors
+            double totalMeasurementProbability = 1.0;
+            for (int j = 0; j < 3; j++) // front, left, right
+            {
+                if (expected[j])     // state has a wall
+                {
+                    // 0.8 if sensor also senses wall, else 0.2
+                    double measurementProbability = sensorMeasurements[j] ? 0.8 : 0.2;
+                    totalMeasurementProbability *= measurementProbability;
+                }
+                else // State has no wall
+                {
+                    // 0.7 if sensor also senses no wall, else 0.3
+                    double measurementProbability = sensorMeasurements[j] ? 0.3 : 0.7;
+                    totalMeasurementProbability *= measurementProbability;
+                }
+            }
+            observationProbabilities[i] = totalMeasurementProbability;
+            // ROS_INFO("state %d prob %f", i, observationProbabilities[i]);
+
+        }
+        // Inverse of normalization factor
+        double oneOverH = 0;
+        for (int i = 0; i < NUM_STATES; i++)
+        {
+            oneOverH += observationProbabilities[i] * beliefStates[i];
+        }
+        // normalization factor
+        int n = 1/oneOverH;
+        for (int i = 0; i < NUM_STATES; i++)
+        {
+            beliefStates[i] = n * observationProbabilities[i] * beliefStates[i];
+            ROS_INFO("Belief state [%d] = [%f]",i,beliefStates[i]);
+        }
+    }
 	/*==========================================*/
 
 	// Send a velocity command 
@@ -381,6 +443,9 @@ class BayesFilter {
     double movementTransitionProbabilitiesDeterministic[NUM_STATES][NUM_STATES];
     // Transition probabilities for the rotate 180 degrees action, with noise disabled
     double rotationTransitionProbabilitiesDeterministic[NUM_STATES][NUM_STATES];
+
+    // For each state the actual values of {wall_front, wall_left, wall_right}
+    bool expectedMeasurements[NUM_STATES][3];
 
     /*==========================================*/
 };
