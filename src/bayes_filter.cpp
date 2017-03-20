@@ -19,8 +19,8 @@
 #include <ctime> // Needed to seed random number generator with a time value
 #include <sstream>
 
-#include <math.h>
-#include "nav_msgs/Odometry.h"
+//#include <math.h>
+//#include "nav_msgs/Odometry.h"
 
 
 class BayesFilter {
@@ -40,7 +40,7 @@ class BayesFilter {
 		wallSub = nh.subscribe("wall_scan", 1, &BayesFilter::commandCallbackWallScan, this);
 		actionSub = nh.subscribe("action", 1, &BayesFilter::commandCallbackAction, this);
 		markerPub = nh.advertise<visualization_msgs::MarkerArray>("beliefs",1);
-        poseSub = nh.subscribe("base_pose_ground_truth", 1, &BayesFilter::chatterCallback, this);
+        // poseSub = nh.subscribe("base_pose_ground_truth", 1, &BayesFilter::chatterCallback, this);
         movenoise = false;
 		measnoise = false;
 
@@ -58,16 +58,13 @@ class BayesFilter {
         /*============================================*/
 	};
 
-    void chatterCallback(const nav_msgs::Odometry::ConstPtr& msg){
-        int state = (int) floor(msg->pose.pose.position.y) + 5;
-        bool facingLeft = msg->pose.pose.orientation.z > 0 ? true : false;
-        if(!facingLeft) {
-            state = NUM_STATES - state - 1;
-        }
-//		ROS_INFO("facingLeft: %d", facingLeft);
-//		ROS_INFO ( "state is %d", state );
-
-    }
+//    void chatterCallback(const nav_msgs::Odometry::ConstPtr& msg){
+//        int state = (int) floor(msg->pose.pose.position.y) + 5;
+//        bool facingLeft = msg->pose.pose.orientation.z > 0 ? true : false;
+//        if(!facingLeft) {
+//            state = NUM_STATES - state - 1;
+//        }
+//    }
 
     // Calculates and stores the state transition probabilities for the move forward action
     // Assumptions:
@@ -378,10 +375,10 @@ class BayesFilter {
     	  		for (int i = 0; i<steps; i++)
     	  		{
 					moveStartTime = ros::Time::now();
-	
+
 					while (ros::Time::now() - moveStartTime <= moveDuration)
 						move(FORWARD_SPEED_MPS,0);
-						
+
       				ros::Duration(0.2).sleep();
 				}
 
