@@ -19,6 +19,10 @@
 #include <ctime> // Needed to seed random number generator with a time value
 #include <sstream>
 
+#include <math.h>
+#include "nav_msgs/Odometry.h"
+
+
 class BayesFilter {
 	public:
 	// Construst a new BayesFilter object and hook up this ROS node
@@ -36,7 +40,8 @@ class BayesFilter {
 		wallSub = nh.subscribe("wall_scan", 1, &BayesFilter::commandCallbackWallScan, this);
 		actionSub = nh.subscribe("action", 1, &BayesFilter::commandCallbackAction, this);
 		markerPub = nh.advertise<visualization_msgs::MarkerArray>("beliefs",1);
-		movenoise = false;
+        poseSub = nh.subscribe("base_pose_ground_truth", 1, &BayesFilter::chatterCallback, this);
+        movenoise = false;
 		measnoise = false;
 
 		/*=TODO - INSERT-CHANGE CODE HERE IF NEEDED=*/
@@ -51,8 +56,18 @@ class BayesFilter {
         calculateRotationTransitionProbs();
         initializeExpectedMeasurements();
         /*============================================*/
-
 	};
+
+    void chatterCallback(const nav_msgs::Odometry::ConstPtr& msg){
+        int state = (int) floor(msg->pose.pose.position.y) + 5;
+        bool facingLeft = msg->pose.pose.orientation.z > 0 ? true : false;
+        if(!facingLeft) {
+            state = NUM_STATES - state - 1;
+        }
+//		ROS_INFO("facingLeft: %d", facingLeft);
+//		ROS_INFO ( "state is %d", state );
+
+    }
 
     // Calculates and stores the state transition probabilities for the move forward action
     // Assumptions:
@@ -223,7 +238,7 @@ class BayesFilter {
             }
             tempBeliefs[i] = sum;
         }
-        // update the predictions with the new calculated values
+        // update the predictions
         for (int i = 0; i < NUM_STATES; i++)
         {
             beliefStates[i] = tempBeliefs[i];
@@ -251,7 +266,7 @@ class BayesFilter {
             }
             tempBeliefs[i] = sum;
         }
-        // update the predictions with the new calculated values
+        // update the predictions
         for (int i = 0; i < NUM_STATES; i++)
         {
             beliefStates[i] = tempBeliefs[i];
@@ -297,20 +312,19 @@ class BayesFilter {
                 }
             }
             observationProbabilities[i] = totalMeasurementProbability;
-            // ROS_INFO("state %d prob %f", i, observationProbabilities[i]);
 
         }
         // Inverse of normalization factor
-        double oneOverH = 0;
+        double oneOverEta = 0;
         for (int i = 0; i < NUM_STATES; i++)
         {
-            oneOverH += observationProbabilities[i] * beliefStates[i];
+			oneOverEta += observationProbabilities[i] * beliefStates[i];
         }
         // normalization factor
-        int n = 1/oneOverH;
+        double eta = 1/oneOverEta;
         for (int i = 0; i < NUM_STATES; i++)
         {
-            beliefStates[i] = n * observationProbabilities[i] * beliefStates[i];
+            beliefStates[i] = eta * observationProbabilities[i] * beliefStates[i];
             ROS_INFO("Belief state [%d] = [%f]",i,beliefStates[i]);
         }
     }
@@ -422,7 +436,8 @@ class BayesFilter {
 	ros::Duration rotateDuration; // Duration of the rotation
 	ros::Time moveStartTime; // Start time of the rotation
 	ros::Duration moveDuration; // Duration of the move
-	std::vector<double> beliefStates;
+    ros::Subscriber poseSub;
+    std::vector<double> beliefStates;
 	std::vector<double> tempBeliefs;
 	std::vector<double> itemsEta;
 
